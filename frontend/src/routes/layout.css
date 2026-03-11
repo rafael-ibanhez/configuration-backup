@@ -1,0 +1,16 @@
+@import 'tailwindcss';
+@plugin '@tailwindcss/forms';
+
+@layer base {
+	html {
+		font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+		-webkit-font-smoothing: antialiased;
+	}
+}
+
+@layer utilities {
+	.transition-colors {
+		transition-property: color, background-color, border-color;
+		transition-duration: 150ms;
+	}
+}
