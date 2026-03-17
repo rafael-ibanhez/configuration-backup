@@ -61,12 +61,71 @@ function parseSegment(seg) {
   return { dec, hex };
 }
 
+/**
+ * B&R exports use two different formats for base modules (X20BM*):
+ *
+ * Pattern A — BM has a path with a trailing ".BM" segment, card follows at the
+ *   parent path (e.g. BM at "SL2.IF1.ST5.BM", card at "SL2.IF1.ST5").
+ *   Used in exports where B&R places the BM at a dedicated sub-address.
+ *
+ * Pattern B — BM and card share the exact same path (duplicate-path rows), BM
+ *   appearing first (e.g. both at "IF3.ST5.IF1.ST2").
+ *   Used in exports where B&R lists BM and card at the same slot address.
+ *
+ * In both cases the BM ends up owning the slot path/address and the actual I/O
+ * card becomes a child, forcing an extra click to see what the slot really is.
+ *
+ * This pre-pass swaps those pairs so the real card always claims the slot path
+ * and the BM is demoted to an empty-path child (attached to the card).
+ * Connector rows (X20TB*) that already use an empty path are unaffected.
+ */
+function reorganizeRows(rows) {
+  const result = [];
+  let i = 0;
+  while (i < rows.length) {
+    const row     = rows[i];
+    const pathStr = String(row[2] ?? '').trim();
+
+    if (pathStr !== '' && pathStr !== '$root' && i + 1 < rows.length) {
+      const segments = pathStr.split('.');
+      const lastSeg  = segments[segments.length - 1];
+      const nextRow  = rows[i + 1];
+      const nextPath = String(nextRow[2] ?? '').trim();
+
+      // Pattern A: BM at "slot.BM", card at "slot" (next row)
+      if (/^BM$/i.test(lastSeg)) {
+        const parentPath = segments.slice(0, -1).join('.');
+        if (nextPath === parentPath) {
+          result.push([nextRow[0], nextRow[1], parentPath]); // card → slot path
+          result.push([row[0],     row[1],     '']);          // BM → empty-path child
+          i += 2;
+          continue;
+        }
+      }
+
+      // Pattern B: BM at "slot", real card also at "slot" (duplicate path)
+      // Identify BM by the article number (first whitespace-delimited token of col A).
+      const article = String(row[0]).trim().split(/\s+/)[0];
+      if (/^x20bm/i.test(article) && nextPath === pathStr) {
+        result.push([nextRow[0], nextRow[1], pathStr]); // card → slot path
+        result.push([row[0],     row[1],     '']);       // BM → empty-path child
+        i += 2;
+        continue;
+      }
+    }
+
+    result.push(row);
+    i++;
+  }
+  return result;
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
   const absPath = path.resolve(process.cwd(), excelFile);
   const wb      = xlsx.readFile(absPath);
   const ws      = wb.Sheets[wb.SheetNames[0]];
-  const rows    = xlsx.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  const rows    = reorganizeRows(xlsx.utils.sheet_to_json(ws, { header: 1, defval: '' }));
 
   console.log(`Read ${rows.length} rows from: ${absPath}`);
   console.log(`Target: model="${model}" version="${version}" name="${name}"`);
