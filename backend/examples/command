@@ -1,0 +1,7 @@
+Import node list
+node scripts/import-config.js exports/example.xlsx "FA-MKIII" "V2.1.5.0" "MK-III" --version-to=V2.1.9.9
+
+Import IO list
+node scripts/import-io.js --file exports/MKII-3_6_23_IO.xlsx --model "FA-MKIII" --version "V2.1.5.0" --overwrite
+
+

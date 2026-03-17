@@ -1,5 +1,5 @@
 node_modules
-backend/exports
+backend/exports/
 
 # Output
 .output
@@ -14,8 +14,10 @@ backend/exports
 Thumbs.db
 
 # Env
-.env
-.env.*
+backend/.env
+backend/.env.*
+frontend/.env
+frontend/.env.*
 !.env.example
 !.env.test
 
