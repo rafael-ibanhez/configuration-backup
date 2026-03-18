@@ -9,7 +9,8 @@
 		"preview": "node ./scripts/sync-backend-port.js && vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"lint": "prettier --check .",
-		"format": "prettier --write ."
+		"format": "prettier --write .",
+		"vite" : "vite build"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "^7.0.0",

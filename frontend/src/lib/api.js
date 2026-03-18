@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3005';
 
 async function req(method, path, body) {
   const controller = new AbortController();

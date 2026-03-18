@@ -87,7 +87,28 @@ router.get('/compare', async (req, res) => {
       const descSpaces = (n.description.match(/ /g) || []).length;
       return nameSpaces <= descSpaces ? n.name : n.description;
     }
-    function nodeLabel(n) { return instanceLabel(n); }
+
+    // IO entries (created by import-io.js) have descriptions starting with "AT %".
+    function isIOEntry(n) {
+      return typeof n.description === 'string' && n.description.startsWith('AT %');
+    }
+
+    // Stable key used for MATCHING during comparison.
+    // IO entries: keyed by channel (description = "AT %IX.DigitalInput02") — the physical
+    // address is stable, while variable names change between software versions.
+    // Hardware nodes: keyed by the identifier-like instance name.
+    function nodeKey(n) {
+      if (isIOEntry(n)) return n.description;
+      return instanceLabel(n);
+    }
+
+    // Human-readable label for DISPLAY in path keys and diff output.
+    // IO entries: show the variable name (the interesting part).
+    // Hardware nodes: show the instance label.
+    function nodeLabel(n) {
+      if (isIOEntry(n)) return n.name || n.description;
+      return instanceLabel(n);
+    }
     function pathLabels(nodeArr) { return nodeArr.map(nodeLabel); }
 
     // Flatten the entire TO tree so we can do a global name search for move detection.
@@ -112,9 +133,14 @@ router.get('/compare', async (req, res) => {
       const bAddr = fmtAddr(b.address_dec, b.address_hex);
       if (aAddr !== bAddr)
         changes.push({ field: 'address', from: aAddr, to: bAddr });
-      if (a.name !== b.name)
-        changes.push({ field: 'name', from: a.name, to: b.name });
-      if ((a.description ?? '') !== (b.description ?? ''))
+      if (a.name !== b.name) {
+        // For IO entries, a name change means the software variable was renamed.
+        const field = isIOEntry(a) ? 'variable' : 'name';
+        changes.push({ field, from: a.name, to: b.name });
+      }
+      // For IO entries the description IS the channel (the matching key), so it never
+      // changes between a matched pair. Only emit 'article' for hardware nodes.
+      if (!isIOEntry(a) && (a.description ?? '') !== (b.description ?? ''))
         changes.push({ field: 'article', from: a.description, to: b.description });
       return changes;
     }
@@ -125,89 +151,114 @@ router.get('/compare', async (req, res) => {
     // Unmatched TO address → ADDED.
     // Nodes without address → matched by description/name within the same parent.
     function diffLevel(fromNodes, toNodes, fromPath, toPath, removed, added, modified, toFlat, usedToIds) {
+      // Build address buckets — multiple siblings may share the same address_dec
+      // (e.g. an "IF1" placeholder and the real module "X20IF1091-1" are both
+      // stored at address 1). Collect in insertion order and match positionally
+      // so neither is silently dropped by a Map overwrite.
       const fromByAddr = new Map();
       const fromNoAddr = [];
       for (const n of fromNodes) {
-        if (n.address_dec !== null) fromByAddr.set(n.address_dec, n);
-        else fromNoAddr.push(n);
+        if (n.address_dec !== null) {
+          if (!fromByAddr.has(n.address_dec)) fromByAddr.set(n.address_dec, []);
+          fromByAddr.get(n.address_dec).push(n);
+        } else {
+          fromNoAddr.push(n);
+        }
       }
       const toByAddr = new Map();
       const toNoAddr = [];
       for (const n of toNodes) {
-        if (n.address_dec !== null) toByAddr.set(n.address_dec, n);
-        else toNoAddr.push(n);
+        if (n.address_dec !== null) {
+          if (!toByAddr.has(n.address_dec)) toByAddr.set(n.address_dec, []);
+          toByAddr.get(n.address_dec).push(n);
+        } else {
+          toNoAddr.push(n);
+        }
       }
 
-      // ── Step 1: addressed nodes — match by address ──────────────────────
-      for (const [addr, fromNode] of fromByAddr) {
-        if (toByAddr.has(addr)) {
-          // Same address in both → compare properties, recurse into children
-          const toNode  = toByAddr.get(addr);
-          usedToIds.add(toNode.id);
-          const fpFull  = [...fromPath, fromNode];
-          const tpFull  = [...toPath,   toNode];
-          const changes = compareProps(fromNode, toNode);
-          if (changes.length) {
-            modified.push({
-              pathKey:   pathLabels(fpFull).join(' \u203a '),
-              toPathKey: pathLabels(tpFull).join(' \u203a '),
-              path:      pathLabels(fpFull),
-              changes, fromNode, toNode, moved: false,
-            });
-          }
-          diffLevel(fromNode.children ?? [], toNode.children ?? [], fpFull, tpFull, removed, added, modified, toFlat, usedToIds);
-        } else {
-          // Address missing from TO — search the entire TO tree by instance label
-          // (the identifier-like field: no spaces = B&R instance name, e.g. "AtexZone")
-          const fromLabel = instanceLabel(fromNode);
-          const matchEntry = fromLabel
-            ? toFlat.find(({ node: n }) => !usedToIds.has(n.id) && instanceLabel(n) === fromLabel)
-            : null;
-          if (matchEntry) {
-            // Found elsewhere → MOVED (address and/or parent changed)
-            usedToIds.add(matchEntry.node.id);
-            const toNode  = matchEntry.node;
+      // ── Step 1: addressed nodes — match positionally within each address bucket ──
+      for (const [addr, fromBucket] of fromByAddr) {
+        const toBucket = toByAddr.get(addr) ?? [];
+        for (let i = 0; i < fromBucket.length; i++) {
+          const fromNode = fromBucket[i];
+          const toNode   = toBucket[i] ?? null;
+          if (toNode) {
+            // Same address at same position in both → compare, recurse
+            usedToIds.add(toNode.id);
             const fpFull  = [...fromPath, fromNode];
-            const tpFull  = matchEntry.path;
-            const changes = [];
-            const fa = fmtAddr(fromNode.address_dec, fromNode.address_hex);
-            const ta = fmtAddr(toNode.address_dec,   toNode.address_hex);
-            if (fa !== ta) changes.push({ field: 'address', from: fa, to: ta });
-            if (fromNode.name !== toNode.name) changes.push({ field: 'name', from: fromNode.name, to: toNode.name });
-            const fromParent = pathLabels(fromPath).join(' \u203a ') || '(root)';
-            const toParent   = pathLabels(tpFull.slice(0, -1)).join(' \u203a ') || '(root)';
-            if (fromParent !== toParent) changes.push({ field: 'location', from: fromParent, to: toParent });
-            modified.push({
-              pathKey:   pathLabels(fpFull).join(' \u203a '),
-              toPathKey: pathLabels(tpFull).join(' \u203a '),
-              path:      pathLabels(fpFull),
-              changes, fromNode, toNode, moved: true,
-            });
-            // Compare children of the moved node
+            const tpFull  = [...toPath,   toNode];
+            const changes = compareProps(fromNode, toNode);
+            if (changes.length) {
+              modified.push({
+                pathKey:   pathLabels(fpFull).join(' \u203a '),
+                toPathKey: pathLabels(tpFull).join(' \u203a '),
+                path:      pathLabels(fpFull),
+                changes, fromNode, toNode, moved: false,
+              });
+            }
             diffLevel(fromNode.children ?? [], toNode.children ?? [], fpFull, tpFull, removed, added, modified, toFlat, usedToIds);
           } else {
-            // Not found anywhere → REMOVED (including all descendants)
-            collectSubtree(fromNode, fromPath, removed, null);
+            // No positional match — search the entire TO tree by instance key (moved?)
+            const fromKey = nodeKey(fromNode);
+            const matchEntry = fromKey
+              ? toFlat.find(({ node: n }) => !usedToIds.has(n.id) && nodeKey(n) === fromKey)
+              : null;
+            if (matchEntry) {
+              usedToIds.add(matchEntry.node.id);
+              const toNode  = matchEntry.node;
+              const fpFull  = [...fromPath, fromNode];
+              const tpFull  = matchEntry.path;
+              const changes = [];
+              const fa = fmtAddr(fromNode.address_dec, fromNode.address_hex);
+              const ta = fmtAddr(toNode.address_dec,   toNode.address_hex);
+              if (fa !== ta) changes.push({ field: 'address', from: fa, to: ta });
+              if (fromNode.name !== toNode.name) changes.push({ field: 'name', from: fromNode.name, to: toNode.name });
+              const fromParent = pathLabels(fromPath).join(' \u203a ') || '(root)';
+              const toParent   = pathLabels(tpFull.slice(0, -1)).join(' \u203a ') || '(root)';
+              if (fromParent !== toParent) changes.push({ field: 'location', from: fromParent, to: toParent });
+              modified.push({
+                pathKey:   pathLabels(fpFull).join(' \u203a '),
+                toPathKey: pathLabels(tpFull).join(' \u203a '),
+                path:      pathLabels(fpFull),
+                changes, fromNode, toNode, moved: true,
+              });
+              diffLevel(fromNode.children ?? [], toNode.children ?? [], fpFull, tpFull, removed, added, modified, toFlat, usedToIds);
+            } else {
+              collectSubtree(fromNode, fromPath, removed, null);
+            }
           }
         }
       }
 
       // ── Step 2: TO addressed nodes not claimed → ADDED ──────────────────
-      for (const [, toNode] of toByAddr) {
-        if (!usedToIds.has(toNode.id)) collectSubtree(toNode, toPath, added, usedToIds);
+      for (const [, toBucket] of toByAddr) {
+        for (const toNode of toBucket) {
+          if (!usedToIds.has(toNode.id)) collectSubtree(toNode, toPath, added, usedToIds);
+        }
       }
 
-      // ── Step 3: unaddressed nodes — match by instance label ─────────────
+      // ── Step 3: unaddressed nodes — match by stable key ─────────────────
+      // Hardware nodes → instance label; IO entries → channel (description).
+      //
+      // Multiple nodes may legitimately share the same key (several PLC variables
+      // can read/write the same physical channel, e.g. "AT %IB.SDC_LifeCnt").
+      // We match positionally within each key group: 1st-from ↔ 1st-to,
+      // 2nd-from ↔ 2nd-to, etc.  Excess entries on either side → removed/added.
       const toNoAddrByKey = new Map();
       for (const n of toNoAddr) {
         if (usedToIds.has(n.id)) continue;
-        const k = instanceLabel(n);
-        toNoAddrByKey.set(k, toNoAddrByKey.has(k) ? null : n); // null = ambiguous
+        const k = nodeKey(n);
+        if (!toNoAddrByKey.has(k)) toNoAddrByKey.set(k, []);
+        toNoAddrByKey.get(k).push(n);
       }
+      const toNoAddrIdx = new Map(); // key → next positional index to consume
       for (const fromNode of fromNoAddr) {
-        const k = instanceLabel(fromNode);
-        const toNode = toNoAddrByKey.get(k) ?? null;
+        const k        = nodeKey(fromNode);
+        const bucket   = toNoAddrByKey.get(k);
+        const idx      = toNoAddrIdx.get(k) ?? 0;
+        const toNode   = bucket?.[idx] ?? null;
         if (toNode) {
+          toNoAddrIdx.set(k, idx + 1);
           usedToIds.add(toNode.id);
           const fpFull  = [...fromPath, fromNode];
           const tpFull  = [...toPath,   toNode];
