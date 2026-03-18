@@ -41,7 +41,7 @@ function _layout($$renderer, $$props) {
       if (href === "/") return store_get($$store_subs ??= {}, "$page", page).url.pathname === "/";
       return store_get($$store_subs ??= {}, "$page", page).url.pathname.startsWith(href);
     }
-    head("12qhfyh", $$renderer2, ($$renderer3) => {
+    head("1njzl3a", $$renderer2, ($$renderer3) => {
       $$renderer3.title(($$renderer4) => {
         $$renderer4.push(`<title>Nilpeter Config backup</title>`);
       });

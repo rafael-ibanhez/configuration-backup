@@ -1,4 +1,5 @@
 import { b as attr_class, a as attr, s as stringify } from "../../chunks/index2.js";
+import "../../chunks/api.js";
 function _page($$renderer, $$props) {
   $$renderer.component(($$renderer2) => {
     let nameSearch = "";

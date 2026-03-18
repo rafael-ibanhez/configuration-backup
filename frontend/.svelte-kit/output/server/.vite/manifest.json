@@ -10,6 +10,10 @@
       "_internal.js"
     ]
   },
+  "_api.js": {
+    "file": "chunks/api.js",
+    "name": "api"
+  },
   "_environment.js": {
     "file": "chunks/environment.js",
     "name": "environment"
@@ -133,7 +137,8 @@
     "src": "src/routes/+page.svelte",
     "isEntry": true,
     "imports": [
-      "_index2.js"
+      "_index2.js",
+      "_api.js"
     ]
   },
   "src/routes/equipment/[id]/+page.svelte": {
@@ -145,7 +150,8 @@
       "_exports.js",
       "_utils.js",
       "_root.js",
-      "_state.svelte.js"
+      "_state.svelte.js",
+      "_api.js"
     ]
   },
   "src/routes/hardware-tree/+page.svelte": {
@@ -154,7 +160,8 @@
     "src": "src/routes/hardware-tree/+page.svelte",
     "isEntry": true,
     "imports": [
-      "_index2.js"
+      "_index2.js",
+      "_api.js"
     ]
   },
   "src/routes/hardware-tree/[id]/+page.svelte": {
@@ -167,7 +174,8 @@
       "_exports.js",
       "_utils.js",
       "_root.js",
-      "_state.svelte.js"
+      "_state.svelte.js",
+      "_api.js"
     ]
   },
   "src/routes/hardware-tree/compare/+page.svelte": {
@@ -176,13 +184,17 @@
     "src": "src/routes/hardware-tree/compare/+page.svelte",
     "isEntry": true,
     "imports": [
-      "_index2.js"
+      "_index2.js",
+      "_api.js"
     ]
   },
   "src/routes/settings/+page.svelte": {
     "file": "entries/pages/settings/_page.svelte.js",
     "name": "entries/pages/settings/_page.svelte",
     "src": "src/routes/settings/+page.svelte",
-    "isEntry": true
+    "isEntry": true,
+    "imports": [
+      "_api.js"
+    ]
   }
 }

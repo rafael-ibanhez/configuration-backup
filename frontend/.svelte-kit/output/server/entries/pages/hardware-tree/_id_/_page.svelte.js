@@ -6,9 +6,10 @@ import "clsx";
 import "@sveltejs/kit/internal/server";
 import "../../../../chunks/root.js";
 import "../../../../chunks/state.svelte.js";
+import "../../../../chunks/api.js";
 function _page($$renderer, $$props) {
   $$renderer.component(($$renderer2) => {
-    head("ekojlw", $$renderer2, ($$renderer3) => {
+    head("cg2axd", $$renderer2, ($$renderer3) => {
       $$renderer3.title(($$renderer4) => {
         $$renderer4.push(`<title>${escape_html("Hardware Tree")} — Nilpeter Config Backup</title>`);
       });

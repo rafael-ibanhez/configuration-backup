@@ -1,4 +1,5 @@
 import { h as head, e as ensure_array_like, c as escape_html, a as attr, i as derived } from "../../../../chunks/index2.js";
+import "../../../../chunks/api.js";
 function _page($$renderer, $$props) {
   $$renderer.component(($$renderer2) => {
     let allTrees = [];
@@ -11,7 +12,7 @@ function _page($$renderer, $$props) {
     let fromVersion = "";
     let toVersion = "";
     const canCompare = derived(() => false);
-    head("1wnj4wc", $$renderer2, ($$renderer3) => {
+    head("1ri2c3d", $$renderer2, ($$renderer3) => {
       $$renderer3.title(($$renderer4) => {
         $$renderer4.push(`<title>Compare Hardware Trees — Nilpeter Config Backup</title>`);
       });

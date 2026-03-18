@@ -1,7 +1,8 @@
 import { h as head } from "../../../chunks/index2.js";
+import "../../../chunks/api.js";
 function _page($$renderer, $$props) {
   $$renderer.component(($$renderer2) => {
-    head("10zzpng", $$renderer2, ($$renderer3) => {
+    head("1ztyg9", $$renderer2, ($$renderer3) => {
       $$renderer3.title(($$renderer4) => {
         $$renderer4.push(`<title>Hardware Trees — Nilpeter Config Backup</title>`);
       });
